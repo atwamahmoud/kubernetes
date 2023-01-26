@@ -125,6 +125,7 @@ resources:
     - kms:
        apiVersion: v2
        name: kms-provider
+       cachesize: 1000
        endpoint: unix:///@kms-provider.sock
 `
 
@@ -228,6 +229,7 @@ resources:
     - kms:
        apiVersion: v2
        name: kms-provider
+       cachesize: 1000
        endpoint: unix:///@kms-provider.sock
 `
 	pluginMock, err := kmsv2mock.NewBase64Plugin("@kms-provider.sock")
@@ -440,6 +442,7 @@ resources:
     - kms:
        apiVersion: v2
        name: kms-provider
+       cachesize: 1000
        endpoint: unix:///@kms-provider.sock
 `
 

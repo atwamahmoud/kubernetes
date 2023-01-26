@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"testing"
 	"time"
 
@@ -258,20 +257,14 @@ func TestFsStoreLoad(t *testing.T) {
 		uid             types.UID
 		resourceVersion string
 		err             string
-		skipOnWindows   bool
 	}{
-		{"checkpoint exists", uid, resourceVersion, "", true},
-		{"checkpoint does not exist", "bogus-uid", "bogus-resourceVersion", "no checkpoint for source", false},
-		{"ambiguous UID", "", "bogus-resourceVersion", "empty UID is ambiguous", false},
-		{"ambiguous ResourceVersion", "bogus-uid", "", "empty ResourceVersion is ambiguous", false},
+		{"checkpoint exists", uid, resourceVersion, ""},
+		{"checkpoint does not exist", "bogus-uid", "bogus-resourceVersion", "no checkpoint for source"},
+		{"ambiguous UID", "", "bogus-resourceVersion", "empty UID is ambiguous"},
+		{"ambiguous ResourceVersion", "bogus-uid", "", "empty ResourceVersion is ambiguous"},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
-			// Skip tests that fail on Windows, as discussed during the SIG Testing meeting from January 10, 2023
-			if c.skipOnWindows && runtime.GOOS == "windows" {
-				t.Skip("Skipping test that fails on Windows")
-			}
-
 			source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{
 				ConfigMap: &apiv1.ConfigMapNodeConfigSource{
 					Name:             "name",

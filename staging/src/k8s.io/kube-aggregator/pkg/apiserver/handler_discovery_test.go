@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiserver
+package apiserver_test
 
 import (
 	"context"
@@ -37,20 +37,8 @@ import (
 	scheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/cache"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	"k8s.io/kube-aggregator/pkg/apiserver"
 )
-
-func newDiscoveryManager(rm discoveryendpoint.ResourceManager) *discoveryManager {
-	return NewDiscoveryManager(rm).(*discoveryManager)
-}
-
-// Returns true if the queue of services to sync empty this means everything has
-// been reconciled and placed into merged document
-func waitForEmptyQueue(stopCh <-chan struct{}, dm *discoveryManager) bool {
-	return cache.WaitForCacheSync(stopCh, func() bool {
-		// Once items have successfully synced they are removed from queue.
-		return dm.dirtyAPIServiceQueue.Len() == 0
-	})
-}
 
 // Test that the discovery manager starts and aggregates from two local API services
 func TestBasic(t *testing.T) {
@@ -61,7 +49,7 @@ func TestBasic(t *testing.T) {
 	service1.SetGroups(apiGroup1.Items)
 	service2.SetGroups(apiGroup2.Items)
 	aggregatedResourceManager := discoveryendpoint.NewResourceManager()
-	aggregatedManager := newDiscoveryManager(aggregatedResourceManager)
+	aggregatedManager := apiserver.NewDiscoveryManager(aggregatedResourceManager)
 
 	for _, g := range apiGroup1.Items {
 		for _, v := range g.Versions {
@@ -97,12 +85,10 @@ func TestBasic(t *testing.T) {
 		}
 	}
 
-	testCtx, testCancel := context.WithCancel(context.Background())
-	defer testCancel()
-
+	testCtx, _ := context.WithCancel(context.Background())
 	go aggregatedManager.Run(testCtx.Done())
 
-	require.True(t, waitForEmptyQueue(testCtx.Done(), aggregatedManager))
+	cache.WaitForCacheSync(testCtx.Done(), aggregatedManager.ExternalServicesSynced)
 
 	response, _, parsed := fetchPath(aggregatedResourceManager, "")
 	if response.StatusCode != 200 {
@@ -137,8 +123,7 @@ func TestDirty(t *testing.T) {
 	service := discoveryendpoint.NewResourceManager()
 	aggregatedResourceManager := discoveryendpoint.NewResourceManager()
 
-	aggregatedManager := newDiscoveryManager(aggregatedResourceManager)
-
+	aggregatedManager := apiserver.NewDiscoveryManager(aggregatedResourceManager)
 	aggregatedManager.AddAPIService(&apiregistrationv1.APIService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "v1.stable.example.com",
@@ -158,7 +143,7 @@ func TestDirty(t *testing.T) {
 	defer cancel()
 
 	go aggregatedManager.Run(testCtx.Done())
-	require.True(t, waitForEmptyQueue(testCtx.Done(), aggregatedManager))
+	cache.WaitForCacheSync(testCtx.Done(), aggregatedManager.ExternalServicesSynced)
 
 	// immediately check for ping, since Run() should block for local services
 	if !pinged {
@@ -195,22 +180,20 @@ func TestRemoveAPIService(t *testing.T) {
 		}
 	}
 
-	aggregatedManager := newDiscoveryManager(aggyService)
+	aggregatedManager := apiserver.NewDiscoveryManager(aggyService)
 
 	for _, s := range apiServices {
 		aggregatedManager.AddAPIService(s, service)
 	}
 
-	testCtx, testCancel := context.WithCancel(context.Background())
-	defer testCancel()
-
+	testCtx, _ := context.WithCancel(context.Background())
 	go aggregatedManager.Run(testCtx.Done())
 
 	for _, s := range apiServices {
 		aggregatedManager.RemoveAPIService(s.Name)
 	}
 
-	require.True(t, waitForEmptyQueue(testCtx.Done(), aggregatedManager))
+	cache.WaitForCacheSync(testCtx.Done(), aggregatedManager.ExternalServicesSynced)
 
 	response, _, parsed := fetchPath(aggyService, "")
 	if response.StatusCode != 200 {
@@ -263,7 +246,7 @@ func TestLegacyFallback(t *testing.T) {
 		}
 	}))
 
-	aggregatedManager := newDiscoveryManager(aggregatedResourceManager)
+	aggregatedManager := apiserver.NewDiscoveryManager(aggregatedResourceManager)
 	aggregatedManager.AddAPIService(&apiregistrationv1.APIService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "v1.stable.example.com",
@@ -292,7 +275,7 @@ func TestLegacyFallback(t *testing.T) {
 	defer cancel()
 
 	go aggregatedManager.Run(testCtx.Done())
-	require.True(t, waitForEmptyQueue(testCtx.Done(), aggregatedManager))
+	require.True(t, cache.WaitForCacheSync(testCtx.Done(), aggregatedManager.ExternalServicesSynced))
 
 	// At this point external services have synced. Check if discovery document
 	// includes the legacy resources
@@ -346,7 +329,8 @@ func TestNotModified(t *testing.T) {
 		}
 	}
 
-	aggregatedManager := newDiscoveryManager(aggyService)
+	aggregatedManager := apiserver.NewDiscoveryManager(aggyService)
+
 	// Add all except the last group.
 	// Ensure this is done BEFORE the call to run, so they are included in initial
 	// list to keep test focused
@@ -361,10 +345,10 @@ func TestNotModified(t *testing.T) {
 
 	// Important to wait here to ensure we prime the cache with the initial list
 	// of documents in order to exercise 304 Not Modified
-	require.True(t, waitForEmptyQueue(testCtx.Done(), aggregatedManager))
+	require.True(t, cache.WaitForCacheSync(testCtx.Done(), aggregatedManager.ExternalServicesSynced))
 
-	// Now add all groups. We excluded one group before so that AllServicesSynced
-	// could include it in this round. Now, if AllServicesSynced ever returns
+	// Now add all groups. We excluded one group before so that ExternalServicesSynced
+	// could include it in this round. Now, if ExternalServicesSynced ever returns
 	// true, it must have synced all the pre-existing groups before, which would
 	// return 304 Not Modified
 	for _, s := range apiServices {
@@ -372,7 +356,7 @@ func TestNotModified(t *testing.T) {
 	}
 
 	// This would wait the full timeout on 1.26.0.
-	require.True(t, waitForEmptyQueue(testCtx.Done(), aggregatedManager))
+	require.True(t, cache.WaitForCacheSync(testCtx.Done(), aggregatedManager.ExternalServicesSynced))
 }
 
 // copied from staging/src/k8s.io/apiserver/pkg/endpoints/discovery/v2/handler_test.go
