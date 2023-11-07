@@ -1000,6 +1000,35 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 		framework.ExpectNoError(WaitForClusterSizeFunc(ctx, f.ClientSet,
 			func(size int) bool { return size == increasedSize }, time.Second))
 	})
+
+	ginkgo.It("should scale up when unprocessed pod is created and is going to be unschedulable[Feature:ClusterScaleUpIgnoringScheduler]", func(ctx context.Context) {
+		// 70% of allocatable memory of a single node * replica count, forcing a scale up in case of normal pods
+		replicaCount := 2*nodeCount
+		reservedMemory := int(float64(replicaCount)*float64(0.7)*float64(memAllocatableMb))
+		cleanupFunc := ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, "non-existent-scheduler")
+		defer cleanupFunc()
+		// Verify that cluster size is increased
+		ginkgo.By("Waiting for cluster scale-up")
+		sizeFunc := func(size int) bool {
+			// Softly checks scale-up since other types of machines can be added which would affect #nodes
+			return size > nodeCount
+		}
+		framework.ExpectNoError(WaitForClusterSizeFuncWithUnready(ctx, f.ClientSet, sizeFunc, scaleUpTimeout, 0))
+	})
+	ginkgo.It("shouldn't scale up when unprocessed pod is created and is going to be schedulable[Feature:ClusterScaleUpIgnoringScheduler]", func(ctx context.Context) {
+		// 50% of allocatable memory of a single node, so that no scale up would trigger in normal cases
+		replicaCount := 1
+		reservedMemory := int(float64(0.5)*float64(memAllocatableMb))
+		cleanupFunc := ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, "non-existent-scheduler")
+		defer cleanupFunc()
+		// Verify that cluster size is the same
+		ginkgo.By(fmt.Sprintf("Waiting for scale up hoping it won't happen, sleep for %s", scaleUpTimeout.String()))
+		time.Sleep(scaleUpTimeout)
+		sizeFunc := func(size int) bool {
+			return size == nodeCount
+		}
+		framework.ExpectNoError(WaitForClusterSizeFuncWithUnready(ctx, f.ClientSet, sizeFunc, time.Second, 0))
+	})
 })
 
 func installNvidiaDriversDaemonSet(ctx context.Context, f *framework.Framework) {
@@ -1298,7 +1327,7 @@ func getPoolSize(ctx context.Context, f *framework.Framework, poolName string) i
 	return size
 }
 
-func reserveMemory(ctx context.Context, f *framework.Framework, id string, replicas, megabytes int, expectRunning bool, timeout time.Duration, selector map[string]string, tolerations []v1.Toleration, priorityClassName string) func() error {
+func reserveMemory(ctx context.Context, f *framework.Framework, id string, replicas, megabytes int, expectRunning bool, timeout time.Duration, selector map[string]string, tolerations []v1.Toleration, priorityClassName, schedulerName string) func() error {
 	ginkgo.By(fmt.Sprintf("Running RC which reserves %v MB of memory", megabytes))
 	request := int64(1024 * 1024 * megabytes / replicas)
 	config := &testutils.RCConfig{
@@ -1312,6 +1341,7 @@ func reserveMemory(ctx context.Context, f *framework.Framework, id string, repli
 		NodeSelector:      selector,
 		Tolerations:       tolerations,
 		PriorityClassName: priorityClassName,
+		SchedulerName:     schedulerName,
 	}
 	for start := time.Now(); time.Since(start) < rcCreationRetryTimeout; time.Sleep(rcCreationRetryDelay) {
 		err := e2erc.RunRC(ctx, *config)
@@ -1333,19 +1363,25 @@ func reserveMemory(ctx context.Context, f *framework.Framework, id string, repli
 // ReserveMemoryWithPriority creates a replication controller with pods with priority that, in summation,
 // request the specified amount of memory.
 func ReserveMemoryWithPriority(ctx context.Context, f *framework.Framework, id string, replicas, megabytes int, expectRunning bool, timeout time.Duration, priorityClassName string) func() error {
-	return reserveMemory(ctx, f, id, replicas, megabytes, expectRunning, timeout, nil, nil, priorityClassName)
+	return reserveMemory(ctx, f, id, replicas, megabytes, expectRunning, timeout, nil, nil, priorityClassName, "")
 }
 
 // ReserveMemoryWithSelectorAndTolerations creates a replication controller with pods with node selector that, in summation,
 // request the specified amount of memory.
 func ReserveMemoryWithSelectorAndTolerations(ctx context.Context, f *framework.Framework, id string, replicas, megabytes int, expectRunning bool, timeout time.Duration, selector map[string]string, tolerations []v1.Toleration) func() error {
-	return reserveMemory(ctx, f, id, replicas, megabytes, expectRunning, timeout, selector, tolerations, "")
+	return reserveMemory(ctx, f, id, replicas, megabytes, expectRunning, timeout, selector, tolerations, "", "")
+}
+
+// ReserveMemoryWithSchedulerName creates a replication controller with pods with scheduler name that, in summation,
+// request the specified amount of memory.
+func ReserveMemoryWithSchedulerName(ctx context.Context, f *framework.Framework, id string, replicas, megabytes int, expectRunning bool, timeout time.Duration, schedulerName string) func() error {
+	return reserveMemory(ctx, f, id, replicas, megabytes, expectRunning, timeout, nil, nil, "", schedulerName)
 }
 
 // ReserveMemory creates a replication controller with pods that, in summation,
 // request the specified amount of memory.
 func ReserveMemory(ctx context.Context, f *framework.Framework, id string, replicas, megabytes int, expectRunning bool, timeout time.Duration) func() error {
-	return reserveMemory(ctx, f, id, replicas, megabytes, expectRunning, timeout, nil, nil, "")
+	return reserveMemory(ctx, f, id, replicas, megabytes, expectRunning, timeout, nil, nil, "", "")
 }
 
 // WaitForClusterSizeFunc waits until the cluster size matches the given function.
