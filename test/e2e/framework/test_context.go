@@ -227,6 +227,10 @@ type TestContextType struct {
 
 	// Enable volume drivers which are disabled by default. See test/e2e/storage/in_tree_volumes.go for details.
 	EnabledVolumeDrivers []string
+
+	// Similar to NodeTextContextType.ExtraEnvs,
+	// ExtraParams is a map of extra parameter names to values.
+	ExtraParams map[string]string
 }
 
 // NodeKillerConfig describes configuration of NodeKiller -- a utility to
@@ -391,6 +395,8 @@ func RegisterCommonFlags(flags *flag.FlagSet) {
 	flags.IntVar(&TestContext.SnapshotControllerHTTPPort, "snapshot-controller-http-port", 0, "The port to use for snapshot controller HTTP communication.")
 
 	flags.Var(&stringArrayValue{&TestContext.EnabledVolumeDrivers}, "enabled-volume-drivers", "Comma-separated list of in-tree volume drivers to enable for testing. This is only needed for in-tree drivers disabled by default. An example is gcepd; see test/e2e/storage/in_tree_volumes.go for full details.")
+
+	flags.Var(cliflag.NewMapStringString(&TestContext.ExtraParams), "extra-params", "Extra parameters that might be needed for some e2e tests. Format: a list of key=value pairs, e.g., env1=val1,env2=val2")
 }
 
 func CreateGinkgoConfig() (types.SuiteConfig, types.ReporterConfig) {

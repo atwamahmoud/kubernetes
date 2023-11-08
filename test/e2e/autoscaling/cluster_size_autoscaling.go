@@ -92,6 +92,8 @@ const (
 	highPriorityClassName       = "high-priority"
 
 	gpuLabel = "cloud.google.com/gke-accelerator"
+
+	nonExistingIgnoredSchedulerNameKey = "non-existing-ignored-scheduler"
 )
 
 var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
@@ -1002,10 +1004,15 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 	})
 
 	ginkgo.It("should scale up when unprocessed pod is created and is going to be unschedulable[Feature:ClusterScaleUpIgnoringScheduler]", func(ctx context.Context) {
+		schedulerName, found := framework.TestContext.ExtraParams[nonExistingIgnoredSchedulerNameKey]
+		if !found {
+			framework.Logf("Skipping test, Didn't find an ignored non-existent scheduler name to use")
+			return
+		}
 		// 70% of allocatable memory of a single node * replica count, forcing a scale up in case of normal pods
-		replicaCount := 2*nodeCount
-		reservedMemory := int(float64(replicaCount)*float64(0.7)*float64(memAllocatableMb))
-		cleanupFunc := ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, "non-existent-scheduler")
+		replicaCount := 2 * nodeCount
+		reservedMemory := int(float64(replicaCount) * float64(0.7) * float64(memAllocatableMb))
+		cleanupFunc := ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName)
 		defer cleanupFunc()
 		// Verify that cluster size is increased
 		ginkgo.By("Waiting for cluster scale-up")
@@ -1016,14 +1023,33 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 		framework.ExpectNoError(WaitForClusterSizeFuncWithUnready(ctx, f.ClientSet, sizeFunc, scaleUpTimeout, 0))
 	})
 	ginkgo.It("shouldn't scale up when unprocessed pod is created and is going to be schedulable[Feature:ClusterScaleUpIgnoringScheduler]", func(ctx context.Context) {
+		schedulerName, found := framework.TestContext.ExtraParams[nonExistingIgnoredSchedulerNameKey]
+		if !found {
+			framework.Logf("Skipping test, Didn't find an ignored non-existent scheduler name to use")
+			return
+		}
 		// 50% of allocatable memory of a single node, so that no scale up would trigger in normal cases
 		replicaCount := 1
-		reservedMemory := int(float64(0.5)*float64(memAllocatableMb))
-		cleanupFunc := ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, "non-existent-scheduler")
+		reservedMemory := int(float64(0.5) * float64(memAllocatableMb))
+		cleanupFunc := ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName)
 		defer cleanupFunc()
 		// Verify that cluster size is the same
 		ginkgo.By(fmt.Sprintf("Waiting for scale up hoping it won't happen, sleep for %s", scaleUpTimeout.String()))
 		time.Sleep(scaleUpTimeout)
+		sizeFunc := func(size int) bool {
+			return size == nodeCount
+		}
+		framework.ExpectNoError(WaitForClusterSizeFuncWithUnready(ctx, f.ClientSet, sizeFunc, time.Second, 0))
+	})
+	ginkgo.It("shouldn't scale up when unprocessed pod is created and scheduler is not specified to be ignored[Feature:ClusterScaleUpIgnoringScheduler]", func(ctx context.Context) {
+		// 70% of allocatable memory of a single node * replica count, forcing a scale up in case of normal pods
+		replicaCount := 2 * nodeCount
+		reservedMemory := int(float64(replicaCount) * float64(0.7) * float64(memAllocatableMb))
+		schedulerName := "non-existent-scheduler-" + f.UniqueName
+		cleanupFunc := ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName)
+		defer cleanupFunc()
+		// Verify that cluster size is the same
+		ginkgo.By(fmt.Sprintf("Waiting for scale up hoping it won't happen, sleep for %s", scaleUpTimeout.String()))
 		sizeFunc := func(size int) bool {
 			return size == nodeCount
 		}
