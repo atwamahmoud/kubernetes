@@ -93,7 +93,7 @@ const (
 
 	gpuLabel = "cloud.google.com/gke-accelerator"
 
-	nonExistingIgnoredSchedulerNameKey = "non-existing-ignored-scheduler"
+	nonExistingIgnoredSchedulerNameKey = "non-existing-bypassed-scheduler"
 )
 
 var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
@@ -1003,7 +1003,7 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 			func(size int) bool { return size == increasedSize }, time.Second))
 	})
 
-	ginkgo.It("should scale up when unprocessed pod is created and is going to be unschedulable[Feature:ClusterScaleUpIgnoringScheduler]", func(ctx context.Context) {
+	ginkgo.It("should scale up when unprocessed pod is created and is going to be unschedulable[Feature:ClusterScaleUpBypassScheduler]", func(ctx context.Context) {
 		schedulerName, found := framework.TestContext.ExtraParams[nonExistingIgnoredSchedulerNameKey]
 		if !found {
 			framework.Logf("Skipping test, Didn't find an ignored non-existent scheduler name to use")
@@ -1022,7 +1022,7 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 		}
 		framework.ExpectNoError(WaitForClusterSizeFuncWithUnready(ctx, f.ClientSet, sizeFunc, scaleUpTimeout, 0))
 	})
-	ginkgo.It("shouldn't scale up when unprocessed pod is created and is going to be schedulable[Feature:ClusterScaleUpIgnoringScheduler]", func(ctx context.Context) {
+	ginkgo.It("shouldn't scale up when unprocessed pod is created and is going to be schedulable[Feature:ClusterScaleUpBypassScheduler]", func(ctx context.Context) {
 		schedulerName, found := framework.TestContext.ExtraParams[nonExistingIgnoredSchedulerNameKey]
 		if !found {
 			framework.Logf("Skipping test, Didn't find an ignored non-existent scheduler name to use")
@@ -1041,7 +1041,7 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 		}
 		framework.ExpectNoError(WaitForClusterSizeFuncWithUnready(ctx, f.ClientSet, sizeFunc, time.Second, 0))
 	})
-	ginkgo.It("shouldn't scale up when unprocessed pod is created and scheduler is not specified to be ignored[Feature:ClusterScaleUpIgnoringScheduler]", func(ctx context.Context) {
+	ginkgo.It("shouldn't scale up when unprocessed pod is created and scheduler is not specified to be bypassed[Feature:ClusterScaleUpBypassScheduler]", func(ctx context.Context) {
 		// 70% of allocatable memory of a single node * replica count, forcing a scale up in case of normal pods
 		replicaCount := 2 * nodeCount
 		reservedMemory := int(float64(replicaCount) * float64(0.7) * float64(memAllocatableMb))
