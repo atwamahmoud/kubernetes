@@ -93,7 +93,7 @@ const (
 
 	gpuLabel = "cloud.google.com/gke-accelerator"
 
-	nonExistingIgnoredSchedulerNameKey = "non-existing-bypassed-scheduler"
+	nonExistingBypassedSchedulerNameKey = "non-existing-bypassed-scheduler"
 )
 
 var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
@@ -1004,7 +1004,7 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 	})
 
 	ginkgo.It("should scale up when unprocessed pod is created and is going to be unschedulable[Feature:ClusterScaleUpBypassScheduler]", func(ctx context.Context) {
-		schedulerName, found := framework.TestContext.ExtraParams[nonExistingIgnoredSchedulerNameKey]
+		schedulerName, found := framework.TestContext.ExtraParams[nonExistingBypassedSchedulerNameKey]
 		if !found {
 			framework.Logf("Skipping test, Didn't find an ignored non-existent scheduler name to use")
 			return
@@ -1023,7 +1023,7 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 		framework.ExpectNoError(WaitForClusterSizeFuncWithUnready(ctx, f.ClientSet, sizeFunc, scaleUpTimeout, 0))
 	})
 	ginkgo.It("shouldn't scale up when unprocessed pod is created and is going to be schedulable[Feature:ClusterScaleUpBypassScheduler]", func(ctx context.Context) {
-		schedulerName, found := framework.TestContext.ExtraParams[nonExistingIgnoredSchedulerNameKey]
+		schedulerName, found := framework.TestContext.ExtraParams[nonExistingBypassedSchedulerNameKey]
 		if !found {
 			framework.Logf("Skipping test, Didn't find an ignored non-existent scheduler name to use")
 			return
@@ -1050,6 +1050,7 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 		defer cleanupFunc()
 		// Verify that cluster size is the same
 		ginkgo.By(fmt.Sprintf("Waiting for scale up hoping it won't happen, sleep for %s", scaleUpTimeout.String()))
+		time.Sleep(scaleUpTimeout)
 		sizeFunc := func(size int) bool {
 			return size == nodeCount
 		}
