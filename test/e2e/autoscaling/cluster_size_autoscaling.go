@@ -1012,8 +1012,7 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 		// 70% of allocatable memory of a single node * replica count, forcing a scale up in case of normal pods
 		replicaCount := 2 * nodeCount
 		reservedMemory := int(float64(replicaCount) * float64(0.7) * float64(memAllocatableMb))
-		cleanupFunc := ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName)
-		defer cleanupFunc()
+		ginkgo.DeferCleanup(ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName))
 		// Verify that cluster size is increased
 		ginkgo.By("Waiting for cluster scale-up")
 		sizeFunc := func(size int) bool {
@@ -1031,8 +1030,7 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 		// 50% of allocatable memory of a single node, so that no scale up would trigger in normal cases
 		replicaCount := 1
 		reservedMemory := int(float64(0.5) * float64(memAllocatableMb))
-		cleanupFunc := ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName)
-		defer cleanupFunc()
+		ginkgo.DeferCleanup(ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName))
 		// Verify that cluster size is the same
 		ginkgo.By(fmt.Sprintf("Waiting for scale up hoping it won't happen, sleep for %s", scaleUpTimeout.String()))
 		time.Sleep(scaleUpTimeout)
@@ -1046,8 +1044,7 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 		replicaCount := 2 * nodeCount
 		reservedMemory := int(float64(replicaCount) * float64(0.7) * float64(memAllocatableMb))
 		schedulerName := "non-existent-scheduler-" + f.UniqueName
-		cleanupFunc := ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName)
-		defer cleanupFunc()
+		ginkgo.DeferCleanup(ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName))
 		// Verify that cluster size is the same
 		ginkgo.By(fmt.Sprintf("Waiting for scale up hoping it won't happen, sleep for %s", scaleUpTimeout.String()))
 		time.Sleep(scaleUpTimeout)

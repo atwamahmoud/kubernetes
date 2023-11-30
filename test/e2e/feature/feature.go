@@ -132,7 +132,7 @@ var (
 	Windows                                 = framework.WithFeature(framework.ValidFeatures.Add("Windows"))
 	WindowsHostProcessContainers            = framework.WithFeature(framework.ValidFeatures.Add("WindowsHostProcessContainers"))
 	WindowsHyperVContainers                 = framework.WithFeature(framework.ValidFeatures.Add("WindowsHyperVContainers"))
-	ClusterScaleUpBypassScheduler     = framework.WithFeature(framework.ValidFeatures.Add("ClusterScaleUpBypassScheduler"))
+	ClusterScaleUpBypassScheduler           = framework.WithFeature(framework.ValidFeatures.Add("ClusterScaleUpBypassScheduler"))
 )
 
 func init() {
