@@ -93,7 +93,7 @@ const (
 
 	gpuLabel = "cloud.google.com/gke-accelerator"
 
-	nonExistingBypassedSchedulerNameKey = "non-existing-bypassed-scheduler"
+	nonExistingBypassedSchedulerName = "non-existing-bypassed-scheduler"
 )
 
 var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
@@ -1004,15 +1004,10 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 	})
 
 	f.It("should scale up when unprocessed pod is created and is going to be unschedulable", feature.ClusterScaleUpBypassScheduler, func(ctx context.Context) {
-		schedulerName, found := framework.TestContext.ExtraParams[nonExistingBypassedSchedulerNameKey]
-		if !found {
-			framework.Logf("Skipping test, Didn't find an ignored non-existent scheduler name to use")
-			return
-		}
 		// 70% of allocatable memory of a single node * replica count, forcing a scale up in case of normal pods
 		replicaCount := 2 * nodeCount
 		reservedMemory := int(float64(replicaCount) * float64(0.7) * float64(memAllocatableMb))
-		ginkgo.DeferCleanup(ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName))
+		ginkgo.DeferCleanup(ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, nonExistingBypassedSchedulerName))
 		// Verify that cluster size is increased
 		ginkgo.By("Waiting for cluster scale-up")
 		sizeFunc := func(size int) bool {
@@ -1022,15 +1017,10 @@ var _ = SIGDescribe("Cluster size autoscaling", framework.WithSlow(), func() {
 		framework.ExpectNoError(WaitForClusterSizeFuncWithUnready(ctx, f.ClientSet, sizeFunc, scaleUpTimeout, 0))
 	})
 	f.It("shouldn't scale up when unprocessed pod is created and is going to be schedulable", feature.ClusterScaleUpBypassScheduler, func(ctx context.Context) {
-		schedulerName, found := framework.TestContext.ExtraParams[nonExistingBypassedSchedulerNameKey]
-		if !found {
-			framework.Logf("Skipping test, Didn't find an ignored non-existent scheduler name to use")
-			return
-		}
 		// 50% of allocatable memory of a single node, so that no scale up would trigger in normal cases
 		replicaCount := 1
 		reservedMemory := int(float64(0.5) * float64(memAllocatableMb))
-		ginkgo.DeferCleanup(ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, schedulerName))
+		ginkgo.DeferCleanup(ReserveMemoryWithSchedulerName(ctx, f, "memory-reservation", replicaCount, reservedMemory, false, 1, nonExistingBypassedSchedulerName))
 		// Verify that cluster size is the same
 		ginkgo.By(fmt.Sprintf("Waiting for scale up hoping it won't happen, sleep for %s", scaleUpTimeout.String()))
 		time.Sleep(scaleUpTimeout)
